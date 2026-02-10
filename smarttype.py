@@ -1,12 +1,12 @@
 """
-SmartType - KI Textvervollständigung für beliebige Textfelder
-=============================================================
-Markiere unvollständigen Text mit ... am Anfang und Ende.
-Drücke den Hotkey, und der Text wird automatisch vervollständigt.
+SmartType - AI Text Completion for Any Text Field
+==================================================
+Mark incomplete text with ... at the beginning.
+Press the hotkey, and the text will be automatically completed.
 
-Beispiel:
-  Eingabe: "Hallo, ...ich mrgn zum arzt ghn... und danach gehe ich einkaufen."
-  Ergebnis: "Hallo, ich muss morgen zum Arzt gehen und danach gehe ich einkaufen."
+Example:
+  Input: "Hello, ...I tmrrw dctr go"
+  Result: "Hello, I have to go to the doctor tomorrow."
 """
 
 import re
@@ -24,7 +24,7 @@ import anthropic
 from pathlib import Path
 from dotenv import load_dotenv
 
-# ── Konfiguration ──────────────────────────────────────────────
+# ── Configuration ──────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).parent
 load_dotenv(SCRIPT_DIR / ".env")
@@ -34,23 +34,23 @@ HOTKEY = os.getenv("SMARTTYPE_HOTKEY", "ctrl+shift+j")
 LANG_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_LANG_HOTKEY", "ctrl+shift+g")
 MODEL = os.getenv("SMARTTYPE_MODEL", "claude-sonnet-4-20250514")
 
-# Spracheinstellungen (veränderbar zur Laufzeit)
+# Language settings (changeable at runtime)
 current_language = os.getenv("SMARTTYPE_LANGUAGE", "de")
 current_prompt = ""
 
 LANG_NAMES = {"de": "Deutsch", "en": "English"}
 
 if not API_KEY:
-    print("[SmartType] FEHLER: CLAUDE_API_KEY nicht gesetzt!")
-    print("  Bitte in .env Datei eintragen: CLAUDE_API_KEY=sk-ant-...")
+    print("[SmartType] ERROR: CLAUDE_API_KEY not set!")
+    print("  Please set in .env file: CLAUDE_API_KEY=sk-ant-...")
     sys.exit(1)
 
 
 def load_prompt(lang: str) -> str:
-    """Lädt den System-Prompt für die angegebene Sprache."""
+    """Loads the system prompt for the given language."""
     prompt_file = SCRIPT_DIR / f"prompt_{lang}.txt"
     if not prompt_file.exists():
-        print(f"[SmartType] FEHLER: Prompt-Datei nicht gefunden: {prompt_file}")
+        print(f"[SmartType] ERROR: Prompt file not found: {prompt_file}")
         sys.exit(1)
     return prompt_file.read_text(encoding="utf-8").strip()
 
@@ -60,23 +60,23 @@ current_prompt = load_prompt(current_language)
 # Claude Client
 client = anthropic.Anthropic(api_key=API_KEY)
 
-# Pattern: ...text (ohne schließendes ..., endet am Cursor)
-PATTERN = re.compile(r"\.\.\.([\s\S]+?)$")
+# Pattern: ...text (no closing ..., ends at cursor)
+PATTERN = re.compile(r"\.\.\.(\[\s\S]+?)$")
 
-# Verhindert gleichzeitige Verarbeitung
+# Prevents concurrent processing
 _processing = False
 
 
-# ── KI-Vervollständigung ────────────────────────────────────────
+# ── AI Completion ────────────────────────────────────────────────
 
 def complete_with_ai(incomplete_text: str, context_before: str = "", context_after: str = "") -> str:
-    """Sendet unvollständigen Text an Claude zur Vervollständigung."""
+    """Sends incomplete text to Claude for completion."""
     user_msg = ""
     if context_before.strip():
-        user_msg += f"Vorheriger Kontext: {context_before.strip()}\n\n"
+        user_msg += f"Previous context: {context_before.strip()}\n\n"
     user_msg += incomplete_text.strip()
     if context_after.strip():
-        user_msg += f"\n\nNachfolgender Kontext: {context_after.strip()}"
+        user_msg += f"\n\nFollowing context: {context_after.strip()}"
 
     response = client.messages.create(
         model=MODEL,
@@ -87,10 +87,10 @@ def complete_with_ai(incomplete_text: str, context_before: str = "", context_aft
     return response.content[0].text.strip()
 
 
-# ── Textfeld-Verarbeitung ───────────────────────────────────────
+# ── Text Field Processing ───────────────────────────────────────
 
 def process_textfield():
-    """Liest vom Cursor rückwärts bis zum ..., vervollständigt den Text."""
+    """Reads backwards from cursor to ..., completes the text."""
     global _processing
 
     if _processing:
@@ -98,17 +98,17 @@ def process_textfield():
     _processing = True
 
     try:
-        # Aktuelle Zwischenablage sichern
+        # Save current clipboard
         try:
             old_clipboard = pyperclip.paste()
         except Exception:
             old_clipboard = ""
 
-        # Zwischenablage leeren um frische Kopie zu erkennen
+        # Clear clipboard to detect fresh copy
         pyperclip.copy("")
         time.sleep(0.05)
 
-        # Alles vom Cursor bis Anfang markieren und kopieren
+        # Select everything from cursor to beginning of line and copy
         keyboard.send("shift+home")
         time.sleep(0.1)
         keyboard.send("ctrl+c")
@@ -116,9 +116,9 @@ def process_textfield():
         text_before_cursor = pyperclip.paste()
 
         if not text_before_cursor or "..." not in text_before_cursor:
-            # Selektion aufheben
+            # Cancel selection
             keyboard.send("right")
-            print("[SmartType] Kein ... Marker gefunden.")
+            print("[SmartType] No ... marker found.")
             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             try:
                 pyperclip.copy(old_clipboard)
@@ -126,13 +126,13 @@ def process_textfield():
                 pass
             return
 
-        # Letztes ... finden
+        # Find last ... marker
         marker_pos = text_before_cursor.rfind("...")
-        incomplete = text_before_cursor[marker_pos + 3:]  # Text nach dem ...
+        incomplete = text_before_cursor[marker_pos + 3:]  # Text after the ...
 
         if not incomplete.strip():
             keyboard.send("right")
-            print("[SmartType] Kein Text nach ... gefunden.")
+            print("[SmartType] No text after ... found.")
             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             try:
                 pyperclip.copy(old_clipboard)
@@ -140,10 +140,10 @@ def process_textfield():
                 pass
             return
 
-        # Selektion aufheben, dann nur ab ... bis Cursor selektieren
-        keyboard.send("right")  # Cursor ans Ende (ursprüngliche Position)
+        # Cancel selection, then select only from ... to cursor
+        keyboard.send("right")  # Cursor to end (original position)
         time.sleep(0.05)
-        # Berechne Anzahl Zeichen ab ... bis Cursor (inkl. ...)
+        # Calculate number of characters from ... to cursor (incl. ...)
         chars_to_select = len(text_before_cursor) - marker_pos
         for _ in range(chars_to_select):
             keyboard.send("shift+left")
@@ -151,27 +151,27 @@ def process_textfield():
 
         print(f"[SmartType] Verarbeite: \"{incomplete.strip()[:60]}\"")
 
-        # Feedback-Sound: Verarbeitung startet
+        # Feedback sound: processing started
         winsound.Beep(800, 150)
 
         completed = complete_with_ai(incomplete)
 
         print(f"  Ergebnis: \"{completed[:60]}\"")
 
-        # Ergebnis einfügen (die Selektion ist noch aktiv — ersetzt ...text)
+        # Insert result (selection is still active — replaces ...text)
         pyperclip.copy(completed)
         time.sleep(0.05)
         keyboard.send("ctrl+v")
         time.sleep(0.2)
 
-        # Feedback-Sound: Fertig
+        # Feedback sound: done
         winsound.Beep(1200, 150)
         time.sleep(0.1)
         winsound.Beep(1500, 150)
 
-        print("[SmartType] Fertig!\n")
+        print("[SmartType] Done!\n")
 
-        # Zwischenablage nach kurzer Verzögerung wiederherstellen
+        # Restore clipboard after short delay
         time.sleep(1.0)
         try:
             pyperclip.copy(old_clipboard)
@@ -179,22 +179,22 @@ def process_textfield():
             pass
 
     except anthropic.APIError as e:
-        print(f"[SmartType] API-Fehler: {e}")
+        print(f"[SmartType] API error: {e}")
         winsound.MessageBeep(winsound.MB_ICONHAND)
     except Exception as e:
-        print(f"[SmartType] Fehler: {e}")
+        print(f"[SmartType] Error: {e}")
         winsound.MessageBeep(winsound.MB_ICONHAND)
     finally:
         _processing = False
 
 
 def on_hotkey():
-    """Wird beim Drücken des Hotkeys aufgerufen."""
+    """Called when the hotkey is pressed."""
     threading.Thread(target=process_textfield, daemon=True).start()
 
 
 def show_toast(message: str, duration_ms: int = 1500):
-    """Zeigt eine kurze Bildschirm-Meldung (Toast) oben und unten an."""
+    """Shows a brief on-screen notification (toast) at the top and bottom."""
     def _show():
         root = tk.Tk()
         root.withdraw()
@@ -241,14 +241,14 @@ def show_toast(message: str, duration_ms: int = 1500):
 
 
 def toggle_language():
-    """Wechselt zwischen Deutsch und Englisch."""
+    """Toggles between German and English."""
     global current_language, current_prompt
     current_language = "en" if current_language == "de" else "de"
     current_prompt = load_prompt(current_language)
     lang_name = LANG_NAMES.get(current_language, current_language)
-    print(f"[SmartType] Sprache gewechselt: {lang_name}")
+    print(f"[SmartType] Language switched: {lang_name}")
     show_toast(f"🌐 SmartType: {lang_name}")
-    # Feedback: tief=de, hoch=en
+    # Feedback: low=de, high=en
     if current_language == "de":
         winsound.Beep(600, 150)
         time.sleep(0.05)
@@ -259,7 +259,7 @@ def toggle_language():
         winsound.Beep(1100, 150)
 
 
-# ── Hauptprogramm ───────────────────────────────────────────────
+# ── Main Program ────────────────────────────────────────────────
 
 def main():
     print()
@@ -288,7 +288,7 @@ def main():
     keyboard.add_hotkey(HOTKEY, on_hotkey, suppress=True)
     keyboard.add_hotkey(LANG_TOGGLE_HOTKEY, toggle_language, suppress=True)
 
-    # Startup-Sound
+    # Startup sound
     winsound.Beep(1000, 100)
     time.sleep(0.05)
     winsound.Beep(1200, 100)
@@ -296,7 +296,7 @@ def main():
     try:
         keyboard.wait()
     except KeyboardInterrupt:
-        print("\n[SmartType] Beendet.")
+        print("\n[SmartType] Stopped.")
 
 
 if __name__ == "__main__":

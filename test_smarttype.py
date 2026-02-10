@@ -1,7 +1,8 @@
 """
 SmartType Unit Tests
 ====================
-Testet die KI-Vervollständigung mit echten API-Aufrufen in DE und EN.
+Tests AI text completion with real API calls in DE and EN.
+Verifies that sentences are correctly and meaningfully completed.
 """
 
 import os
@@ -9,7 +10,7 @@ import sys
 import unittest
 from pathlib import Path
 
-# Projekt-Root zum Path hinzufügen
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from smarttype import complete_with_ai, load_prompt, client, MODEL
@@ -20,7 +21,7 @@ PROMPT_EN = load_prompt("en")
 
 
 def complete(text: str, lang: str = "de", context: str = "") -> str:
-    """Hilfsfunktion: Vervollständigt Text mit dem passenden Prompt."""
+    """Helper: Completes text using the appropriate prompt."""
     import smarttype
     old_prompt = smarttype.current_prompt
     smarttype.current_prompt = PROMPT_DE if lang == "de" else PROMPT_EN
@@ -31,153 +32,195 @@ def complete(text: str, lang: str = "de", context: str = "") -> str:
     return result
 
 
+def verify(result: str, expected_words: list[str], forbidden_words: list[str] = None,
+           must_end_with: str = None, msg: str = "") -> None:
+    """Verifies the result contains expected words and is correct."""
+    result_lower = result.lower()
+    for word in expected_words:
+        assert word.lower() in result_lower, \
+            f"{msg} Erwartet '{word}' in: '{result}'"
+    if forbidden_words:
+        for word in forbidden_words:
+            assert word.lower() not in result_lower, \
+                f"{msg} Unerwartetes '{word}' in: '{result}'"
+    if must_end_with:
+        assert result.rstrip().endswith(must_end_with), \
+            f"{msg} Erwartet Ende mit '{must_end_with}': '{result}'"
+
+
 class TestGermanCompletion(unittest.TestCase):
-    """Tests für deutsche Textvervollständigung."""
+    """Tests for German text completion."""
 
-    def test_missing_articles(self):
-        """Fehlende Artikel ergänzen."""
+    def test_articles_and_prepositions(self):
+        """'Katze schläft Sofa' → 'Die Katze schläft auf dem Sofa.'"""
         result = complete("Katze schläft Sofa", lang="de")
-        self.assertIn("Katze", result)
-        self.assertIn("Sofa", result)
-        # Sollte Artikel enthalten
-        self.assertTrue(
-            "Die" in result or "die" in result,
-            f"Erwartet Artikel 'Die/die' in: {result}"
-        )
-        print(f"  DE Artikel: '{result}'")
+        verify(result,
+               expected_words=["die", "katze", "schläft", "auf", "dem", "sofa"],
+               must_end_with=".", msg="Artikel+Präposition:")
+        print(f"  OK: '{result}'")
 
-    def test_missing_prepositions(self):
-        """Fehlende Präpositionen ergänzen."""
+    def test_auxiliary_verb(self):
+        """'Ich morgen Arzt gehen' → Hilfsverb + Präposition nötig."""
         result = complete("Ich morgen Arzt gehen", lang="de")
-        self.assertIn("Arzt", result)
-        # Sollte 'zum' oder 'zum Arzt' enthalten
+        verify(result,
+               expected_words=["ich", "morgen", "arzt", "gehen"],
+               must_end_with=".", msg="Hilfsverb:")
+        # Muss 'muss' oder 'werde' + 'zum' enthalten
+        r = result.lower()
         self.assertTrue(
-            "zum" in result.lower() or "arzt" in result.lower(),
-            f"Erwartet Präposition in: {result}"
+            ("muss" in r or "werde" in r or "will" in r) and "zum" in r,
+            f"Erwartet Hilfsverb + 'zum': '{result}'"
         )
-        print(f"  DE Präposition: '{result}'")
+        print(f"  OK: '{result}'")
 
-    def test_abbreviated_words(self):
-        """Abgekürzte Wörter vervollständigen."""
+    def test_abbreviated_swimming(self):
+        """'wln wr eign ma schw ghn' → 'Wollen wir eigentlich mal schwimmen gehen?'"""
         result = complete("wln wr eign ma schw ghn", lang="de")
-        self.assertTrue(
-            "wollen" in result.lower() or "schwimmen" in result.lower(),
-            f"Erwartet vervollständigte Wörter in: {result}"
-        )
-        print(f"  DE Abkürzungen: '{result}'")
+        verify(result,
+               expected_words=["wollen", "wir", "eigentlich", "mal", "schwimmen", "gehen"],
+               must_end_with="?", msg="Abkürzungen:")
+        print(f"  OK: '{result}'")
 
-    def test_heavily_abbreviated(self):
-        """Stark abgekürzte Wörter."""
-        result = complete("ih hbe sps bei vln din", lang="de")
-        self.assertTrue(
-            "habe" in result.lower() or "spaß" in result.lower() or "vielen" in result.lower(),
-            f"Erwartet korrekte Wörter in: {result}"
-        )
-        print(f"  DE Stark abgekürzt: '{result}'")
+    def test_abbreviated_hobbies(self):
+        """'ih hbe sps bei vln din abr bsors brtsple' → korrekter Satz über Brettspiele."""
+        result = complete("ih hbe sps bei vln din abr bsors brtsple", lang="de")
+        verify(result,
+               expected_words=["ich", "habe", "spaß", "vielen", "dingen", "besonders", "brettspielen"],
+               must_end_with=".", msg="Stark abgekürzt:")
+        print(f"  OK: '{result}'")
 
-    def test_multiple_sentences(self):
-        """Mehrere Sätze vervollständigen."""
+    def test_two_sentences(self):
+        """'mir geht gut. Keine schmerzen' → Zwei grammatisch korrekte Sätze."""
         result = complete("mir geht gut. Keine schmerzen", lang="de")
+        verify(result,
+               expected_words=["mir", "geht", "gut", "keine", "schmerzen"],
+               msg="Zwei Sätze:")
+        # Sollte 'es' ergänzen und 'Ich habe' oder ähnlich
+        self.assertIn("es", result.lower(), f"Erwartet 'es' in: '{result}'")
         self.assertTrue(
-            "geht" in result.lower() and "schmerzen" in result.lower(),
-            f"Erwartet beide Sätze in: {result}"
+            result.count(".") >= 2 or result.count("!") >= 1,
+            f"Erwartet mindestens 2 Satzzeichen: '{result}'"
         )
-        print(f"  DE Mehrere Sätze: '{result}'")
+        print(f"  OK: '{result}'")
 
-    def test_with_context(self):
-        """Vervollständigung mit Kontext."""
-        result = complete(
-            "knn ich mtbrngn",
-            lang="de",
-            context="Am Samstag grillen wir bei mir."
-        )
-        self.assertTrue(
-            len(result) > len("knn ich mtbrngn"),
-            f"Erwartet längeren Text als Eingabe: {result}"
-        )
-        print(f"  DE Mit Kontext: '{result}'")
+    def test_context_grilling(self):
+        """Mit Kontext 'Grillen' → sinnvolle Antwort zum Mitbringen."""
+        result = complete("knn ich etws mtbrngn", lang="de",
+                          context="Am Samstag grillen wir bei mir.")
+        verify(result,
+               expected_words=["kann", "ich", "etwas", "mitbringen"],
+               must_end_with="?", msg="Kontext Grillen:")
+        print(f"  OK: '{result}'")
 
-    def test_question(self):
-        """Frage vervollständigen."""
+    def test_question_time(self):
+        """'Hst du hte Zt?' → 'Hast du heute Zeit?'"""
         result = complete("Hst du hte Zt?", lang="de")
-        self.assertTrue(
-            "?" in result,
-            f"Erwartet Fragezeichen in: {result}"
-        )
-        print(f"  DE Frage: '{result}'")
+        verify(result,
+               expected_words=["hast", "du", "heute", "zeit"],
+               must_end_with="?", msg="Frage Zeit:")
+        print(f"  OK: '{result}'")
+
+    def test_direction(self):
+        """'Knnst du mr den wg zum bhnhf erkrn' → korrekter Satz."""
+        result = complete("Knnst du mr den wg zum bhnhf erkrn", lang="de")
+        verify(result,
+               expected_words=["kannst", "du", "mir", "weg", "bahnhof", "erklären"],
+               must_end_with="?", msg="Wegbeschreibung:")
+        print(f"  OK: '{result}'")
+
+    def test_weather(self):
+        """'ds wttr ist hte shr schn' → korrekter Wettersatz."""
+        result = complete("ds wttr ist hte shr schn", lang="de")
+        verify(result,
+               expected_words=["wetter", "ist", "heute", "sehr", "schön"],
+               must_end_with=".", msg="Wetter:")
+        print(f"  OK: '{result}'")
 
 
 class TestEnglishCompletion(unittest.TestCase):
-    """Tests für englische Textvervollständigung."""
+    """Tests for English text completion."""
 
-    def test_missing_articles(self):
-        """Missing articles."""
+    def test_articles_and_prepositions(self):
+        """'cat sleeping sofa' → 'The cat is sleeping on the sofa.'"""
         result = complete("cat sleeping sofa", lang="en")
-        self.assertIn("cat", result.lower())
-        self.assertIn("sofa", result.lower())
-        self.assertTrue(
-            "the" in result.lower() or "a" in result.lower(),
-            f"Expected article in: {result}"
-        )
-        print(f"  EN Articles: '{result}'")
+        verify(result,
+               expected_words=["the", "cat", "sleeping", "on", "sofa"],
+               must_end_with=".", msg="Articles:")
+        print(f"  OK: '{result}'")
 
-    def test_missing_prepositions(self):
-        """Missing prepositions."""
+    def test_auxiliary_verb(self):
+        """'I tomorrow doctor go' → need auxiliary + preposition."""
         result = complete("I tomorrow doctor go", lang="en")
+        verify(result,
+               expected_words=["i", "tomorrow", "doctor"],
+               must_end_with=".", msg="Auxiliary:")
+        r = result.lower()
         self.assertTrue(
-            "doctor" in result.lower() and "go" in result.lower(),
-            f"Expected preposition in: {result}"
+            "to the" in r or "to a" in r,
+            f"Expected 'to the/a doctor': '{result}'"
         )
-        print(f"  EN Preposition: '{result}'")
+        print(f"  OK: '{result}'")
 
-    def test_abbreviated_words(self):
-        """Abbreviated words."""
+    def test_abbreviated_swimming(self):
+        """'wnt we actly go swmmng' → correct swimming question."""
         result = complete("wnt we actly go swmmng", lang="en")
-        self.assertTrue(
-            "want" in result.lower() or "swimming" in result.lower(),
-            f"Expected completed words in: {result}"
-        )
-        print(f"  EN Abbreviated: '{result}'")
+        verify(result,
+               expected_words=["want", "actually", "go", "swimming"],
+               must_end_with="?", msg="Swimming:")
+        print(f"  OK: '{result}'")
 
-    def test_heavily_abbreviated(self):
-        """Heavily abbreviated words."""
+    def test_abbreviated_hobbies(self):
+        """'i hve fun mny thngs but espcly bord gmes' → correct hobby sentence."""
         result = complete("i hve fun mny thngs but espcly bord gmes", lang="en")
-        self.assertTrue(
-            "have" in result.lower() or "fun" in result.lower(),
-            f"Expected correct words in: {result}"
-        )
-        print(f"  EN Heavily abbrev: '{result}'")
+        verify(result,
+               expected_words=["have", "fun", "many", "things", "especially", "board", "games"],
+               must_end_with=".", msg="Hobbies:")
+        print(f"  OK: '{result}'")
 
-    def test_multiple_sentences(self):
-        """Multiple sentences."""
+    def test_two_sentences(self):
+        """'me feeling good. no pain' → Two correct sentences."""
         result = complete("me feeling good. no pain", lang="en")
+        verify(result,
+               expected_words=["feeling", "good", "no", "pain"],
+               msg="Two sentences:")
         self.assertTrue(
-            "feeling" in result.lower() or "good" in result.lower(),
-            f"Expected both sentences in: {result}"
+            result.count(".") >= 2 or result.count("!") >= 1,
+            f"Expected at least 2 punctuation marks: '{result}'"
         )
-        print(f"  EN Multiple sentences: '{result}'")
+        print(f"  OK: '{result}'")
 
-    def test_with_context(self):
-        """Completion with context."""
-        result = complete(
-            "cn i brng smthng",
-            lang="en",
-            context="We're having a barbecue on Saturday."
-        )
-        self.assertTrue(
-            len(result) > len("cn i brng smthng"),
-            f"Expected longer text than input: {result}"
-        )
-        print(f"  EN With context: '{result}'")
+    def test_context_barbecue(self):
+        """With context 'barbecue' → meaningful offer to bring something."""
+        result = complete("cn i brng smthng", lang="en",
+                          context="We're having a barbecue on Saturday.")
+        verify(result,
+               expected_words=["can", "i", "bring", "something"],
+               must_end_with="?", msg="Context BBQ:")
+        print(f"  OK: '{result}'")
 
-    def test_question(self):
-        """Question completion."""
+    def test_question_time(self):
+        """'Do yu hve tme tdy?' → 'Do you have time today?'"""
         result = complete("Do yu hve tme tdy?", lang="en")
-        self.assertTrue(
-            "?" in result,
-            f"Expected question mark in: {result}"
-        )
-        print(f"  EN Question: '{result}'")
+        verify(result,
+               expected_words=["do", "you", "have", "time", "today"],
+               must_end_with="?", msg="Question time:")
+        print(f"  OK: '{result}'")
+
+    def test_directions(self):
+        """'cn yu tll me hw to gt to th sttio' → correct direction question."""
+        result = complete("cn yu tll me hw to gt to th sttion", lang="en")
+        verify(result,
+               expected_words=["can", "you", "tell", "me", "how", "to", "get", "station"],
+               must_end_with="?", msg="Directions:")
+        print(f"  OK: '{result}'")
+
+    def test_weather(self):
+        """'th wthr is vry nce tdy' → correct weather sentence."""
+        result = complete("th wthr is vry nce tdy", lang="en")
+        verify(result,
+               expected_words=["weather", "is", "very", "nice", "today"],
+               must_end_with=".", msg="Weather:")
+        print(f"  OK: '{result}'")
 
 
 if __name__ == "__main__":

@@ -16,6 +16,8 @@ import time
 import threading
 import winsound
 
+import tkinter as tk
+
 import keyboard
 import pyperclip
 import anthropic
@@ -29,26 +31,37 @@ load_dotenv(SCRIPT_DIR / ".env")
 
 API_KEY = os.getenv("CLAUDE_API_KEY")
 HOTKEY = os.getenv("SMARTTYPE_HOTKEY", "ctrl+shift+j")
+LANG_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_LANG_HOTKEY", "ctrl+shift+g")
 MODEL = os.getenv("SMARTTYPE_MODEL", "claude-sonnet-4-20250514")
-LANGUAGE = os.getenv("SMARTTYPE_LANGUAGE", "de")
+
+# Spracheinstellungen (veränderbar zur Laufzeit)
+current_language = os.getenv("SMARTTYPE_LANGUAGE", "de")
+current_prompt = ""
+
+LANG_NAMES = {"de": "Deutsch", "en": "English"}
 
 if not API_KEY:
     print("[SmartType] FEHLER: CLAUDE_API_KEY nicht gesetzt!")
     print("  Bitte in .env Datei eintragen: CLAUDE_API_KEY=sk-ant-...")
     sys.exit(1)
 
-# Prompt laden
-prompt_file = SCRIPT_DIR / f"prompt_{LANGUAGE}.txt"
-if not prompt_file.exists():
-    print(f"[SmartType] FEHLER: Prompt-Datei nicht gefunden: {prompt_file}")
-    sys.exit(1)
-SYSTEM_PROMPT = prompt_file.read_text(encoding="utf-8").strip()
+
+def load_prompt(lang: str) -> str:
+    """Lädt den System-Prompt für die angegebene Sprache."""
+    prompt_file = SCRIPT_DIR / f"prompt_{lang}.txt"
+    if not prompt_file.exists():
+        print(f"[SmartType] FEHLER: Prompt-Datei nicht gefunden: {prompt_file}")
+        sys.exit(1)
+    return prompt_file.read_text(encoding="utf-8").strip()
+
+
+current_prompt = load_prompt(current_language)
 
 # Claude Client
 client = anthropic.Anthropic(api_key=API_KEY)
 
-# Pattern: ...text...
-PATTERN = re.compile(r"\.\.\.([\s\S]+?)\.\.\.")
+# Pattern: ...text (ohne schließendes ..., endet am Cursor)
+PATTERN = re.compile(r"\.\.\.([\s\S]+?)$")
 
 # Verhindert gleichzeitige Verarbeitung
 _processing = False
@@ -68,7 +81,7 @@ def complete_with_ai(incomplete_text: str, context_before: str = "", context_aft
     response = client.messages.create(
         model=MODEL,
         max_tokens=2048,
-        system=SYSTEM_PROMPT,
+        system=current_prompt,
         messages=[{"role": "user", "content": user_msg}],
     )
     return response.content[0].text.strip()
@@ -77,7 +90,7 @@ def complete_with_ai(incomplete_text: str, context_before: str = "", context_aft
 # ── Textfeld-Verarbeitung ───────────────────────────────────────
 
 def process_textfield():
-    """Liest das aktuelle Textfeld, vervollständigt ...Text... Bereiche, fügt Ergebnis ein."""
+    """Liest vom Cursor rückwärts bis zum ..., vervollständigt den Text."""
     global _processing
 
     if _processing:
@@ -95,17 +108,27 @@ def process_textfield():
         pyperclip.copy("")
         time.sleep(0.05)
 
-        # Alles auswählen und kopieren
-        keyboard.send("ctrl+a")
-        time.sleep(0.15)
-        keyboard.send("ctrl+c")
-        time.sleep(0.2)
-
-        # Text aus Zwischenablage lesen
-        text = pyperclip.paste()
-
-        if not text or not PATTERN.search(text):
-            print("[SmartType] Keine ...Markierungen... gefunden.")
+        # Wort für Wort rückwärts markieren bis ... gefunden
+        selected_text = ""
+        prev_text = ""
+        max_words = 200  # Sicherheitslimit
+        for _ in range(max_words):
+            keyboard.send("ctrl+shift+left")
+            time.sleep(0.08)
+            keyboard.send("ctrl+c")
+            time.sleep(0.1)
+            selected_text = pyperclip.paste()
+            if "..." in selected_text:
+                break
+            if selected_text == prev_text:
+                # Keine neuen Wörter mehr — Anfang des Feldes erreicht
+                break
+            prev_text = selected_text
+        
+        if "..." not in selected_text:
+            # Selektion aufheben
+            keyboard.send("right")
+            print("[SmartType] Kein ... Marker gefunden.")
             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             try:
                 pyperclip.copy(old_clipboard)
@@ -113,39 +136,32 @@ def process_textfield():
                 pass
             return
 
-        print(f"[SmartType] Verarbeite Text ({len(text)} Zeichen)...")
+        # Letztes ... finden
+        marker_pos = selected_text.rfind("...")
+        incomplete = selected_text[marker_pos + 3:]  # Text nach dem ...
+
+        if not incomplete.strip():
+            keyboard.send("right")
+            print("[SmartType] Kein Text nach ... gefunden.")
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+            try:
+                pyperclip.copy(old_clipboard)
+            except Exception:
+                pass
+            return
+
+        print(f"[SmartType] Verarbeite: \"{incomplete.strip()[:60]}\"")
 
         # Feedback-Sound: Verarbeitung startet
         winsound.Beep(800, 150)
 
-        # Alle ...text... Bereiche von hinten nach vorne ersetzen
-        # (damit Positionen stabil bleiben)
-        matches = list(PATTERN.finditer(text))
-        matches.reverse()
+        completed = complete_with_ai(incomplete)
 
-        for match in matches:
-            incomplete = match.group(1)
+        print(f"  Ergebnis: \"{completed[:60]}\"")
 
-            # Kontext extrahieren (bis zu 300 Zeichen vor/nach)
-            ctx_start = max(0, match.start() - 300)
-            ctx_end = min(len(text), match.end() + 300)
-            context_before = text[ctx_start:match.start()]
-            context_after = text[match.end():ctx_end]
-
-            print(f"  Vervollständige: \"{incomplete.strip()[:60]}...\"")
-
-            completed = complete_with_ai(incomplete, context_before, context_after)
-
-            print(f"  Ergebnis: \"{completed[:60]}...\"")
-
-            # Ersetzen (inklusive der ... Marker)
-            text = text[:match.start()] + completed + text[match.end():]
-
-        # Ergebnis einfügen
-        pyperclip.copy(text)
+        # Ergebnis einfügen (die Selektion ist noch aktiv — ersetzt ...text)
+        pyperclip.copy(completed)
         time.sleep(0.05)
-        keyboard.send("ctrl+a")
-        time.sleep(0.1)
         keyboard.send("ctrl+v")
         time.sleep(0.2)
 
@@ -178,6 +194,72 @@ def on_hotkey():
     threading.Thread(target=process_textfield, daemon=True).start()
 
 
+def show_toast(message: str, duration_ms: int = 1500):
+    """Zeigt eine kurze Bildschirm-Meldung (Toast) oben und unten an."""
+    def _show():
+        root = tk.Tk()
+        root.withdraw()
+
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+
+        windows = []
+        for position in ("top", "bottom"):
+            win = tk.Toplevel(root)
+            win.overrideredirect(True)
+            win.attributes("-topmost", True)
+            win.attributes("-alpha", 0.9)
+            win.configure(bg="#1e1e2e")
+
+            label = tk.Label(
+                win, text=message, font=("Segoe UI", 18, "bold"),
+                fg="#cdd6f4", bg="#1e1e2e", padx=30, pady=15,
+            )
+            label.pack()
+
+            win.update_idletasks()
+            w = win.winfo_reqwidth()
+            h = win.winfo_reqheight()
+            x = (screen_w - w) // 2
+
+            if position == "top":
+                y = 80
+            else:
+                y = screen_h - h - 80
+
+            win.geometry(f"{w}x{h}+{x}+{y}")
+            windows.append(win)
+
+        def _close():
+            for win in windows:
+                win.destroy()
+            root.destroy()
+
+        root.after(duration_ms, _close)
+        root.mainloop()
+
+    threading.Thread(target=_show, daemon=True).start()
+
+
+def toggle_language():
+    """Wechselt zwischen Deutsch und Englisch."""
+    global current_language, current_prompt
+    current_language = "en" if current_language == "de" else "de"
+    current_prompt = load_prompt(current_language)
+    lang_name = LANG_NAMES.get(current_language, current_language)
+    print(f"[SmartType] Sprache gewechselt: {lang_name}")
+    show_toast(f"🌐 SmartType: {lang_name}")
+    # Feedback: tief=de, hoch=en
+    if current_language == "de":
+        winsound.Beep(600, 150)
+        time.sleep(0.05)
+        winsound.Beep(800, 150)
+    else:
+        winsound.Beep(800, 150)
+        time.sleep(0.05)
+        winsound.Beep(1100, 150)
+
+
 # ── Hauptprogramm ───────────────────────────────────────────────
 
 def main():
@@ -185,27 +267,27 @@ def main():
     print("=" * 55)
     print("  SmartType - KI Textvervollständigung")
     print("=" * 55)
-    print(f"  Hotkey:      {HOTKEY}")
-    print(f"  Sprache:     {LANGUAGE}")
-    print(f"  Modell:      {MODEL}")
-    print(f"  Markierung:  ...text...")
+    print(f"  Vervollständigen:  {HOTKEY}")
+    print(f"  Sprache wechseln:  {LANG_TOGGLE_HOTKEY}")
+    print(f"  Sprache:           {LANG_NAMES.get(current_language, current_language)}")
+    print(f"  Modell:            {MODEL}")
+    print(f"  Markierung:        ...text")
     print("=" * 55)
     print()
-    print("  Markiere unvollständigen Text mit ... am Anfang")
-    print("  und Ende, dann drücke den Hotkey.")
+    print("  Schreibe ... vor unvollständigem Text,")
+    print("  setze den Cursor ans Ende und drücke den Hotkey.")
     print()
     print("  Beispiel:")
-    print('    "...Katze schläft Sofa..."')
-    print('    → "Die Katze schläft auf dem Sofa."')
+    print('    "Hallo, ...Katze schläft Sofa"  [Cursor hier]')
+    print('    → "Hallo, Die Katze schläft auf dem Sofa."')
     print()
-    print('    "Hallo, ...ich mrgn arzt ghn... und danach"')
-    print('    → "Hallo, ich muss morgen zum Arzt gehen und danach"')
-    print()
-    print(f"  Drücke {HOTKEY} zum Vervollständigen.")
-    print("  Drücke Strg+C zum Beenden.")
+    print(f"  {HOTKEY} = Vervollständigen")
+    print(f"  {LANG_TOGGLE_HOTKEY} = Sprache DE/EN umschalten")
+    print("  Strg+C = Beenden")
     print()
 
     keyboard.add_hotkey(HOTKEY, on_hotkey, suppress=True)
+    keyboard.add_hotkey(LANG_TOGGLE_HOTKEY, toggle_language, suppress=True)
 
     # Startup-Sound
     winsound.Beep(1000, 100)

@@ -1,0 +1,10 @@
+# SmartType
+.env
+__pycache__/
+*.pyc
+*.pyo
+.conda/
+.venv/
+*.egg-info/
+dist/
+build/

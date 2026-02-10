@@ -108,24 +108,14 @@ def process_textfield():
         pyperclip.copy("")
         time.sleep(0.05)
 
-        # Wort für Wort rückwärts markieren bis ... gefunden
-        selected_text = ""
-        prev_text = ""
-        max_words = 200  # Sicherheitslimit
-        for _ in range(max_words):
-            keyboard.send("ctrl+shift+left")
-            time.sleep(0.08)
-            keyboard.send("ctrl+c")
-            time.sleep(0.1)
-            selected_text = pyperclip.paste()
-            if "..." in selected_text:
-                break
-            if selected_text == prev_text:
-                # Keine neuen Wörter mehr — Anfang des Feldes erreicht
-                break
-            prev_text = selected_text
-        
-        if "..." not in selected_text:
+        # Alles vom Cursor bis Anfang markieren und kopieren
+        keyboard.send("shift+home")
+        time.sleep(0.1)
+        keyboard.send("ctrl+c")
+        time.sleep(0.15)
+        text_before_cursor = pyperclip.paste()
+
+        if not text_before_cursor or "..." not in text_before_cursor:
             # Selektion aufheben
             keyboard.send("right")
             print("[SmartType] Kein ... Marker gefunden.")
@@ -137,8 +127,8 @@ def process_textfield():
             return
 
         # Letztes ... finden
-        marker_pos = selected_text.rfind("...")
-        incomplete = selected_text[marker_pos + 3:]  # Text nach dem ...
+        marker_pos = text_before_cursor.rfind("...")
+        incomplete = text_before_cursor[marker_pos + 3:]  # Text nach dem ...
 
         if not incomplete.strip():
             keyboard.send("right")
@@ -149,6 +139,15 @@ def process_textfield():
             except Exception:
                 pass
             return
+
+        # Selektion aufheben, dann nur ab ... bis Cursor selektieren
+        keyboard.send("right")  # Cursor ans Ende (ursprüngliche Position)
+        time.sleep(0.05)
+        # Berechne Anzahl Zeichen ab ... bis Cursor (inkl. ...)
+        chars_to_select = len(text_before_cursor) - marker_pos
+        for _ in range(chars_to_select):
+            keyboard.send("shift+left")
+        time.sleep(0.1)
 
         print(f"[SmartType] Verarbeite: \"{incomplete.strip()[:60]}\"")
 

@@ -5,5 +5,5 @@ Complete incomplete text in any text field using Claude AI.
 Trigger with a keyboard shortcut.
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "Thomas Wagner"

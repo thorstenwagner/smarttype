@@ -1,5 +1,6 @@
 # SmartType
 .env
+.pypirc
 __pycache__/
 *.pyc
 *.pyo

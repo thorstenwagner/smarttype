@@ -32,11 +32,15 @@ load_dotenv(SCRIPT_DIR / ".env")
 API_KEY = os.getenv("CLAUDE_API_KEY")
 HOTKEY = os.getenv("SMARTTYPE_HOTKEY", "ctrl+shift+j")
 LANG_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_LANG_HOTKEY", "ctrl+shift+g")
+MARKER_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_MARKER_HOTKEY", "ctrl+shift+h")
 MODEL = os.getenv("SMARTTYPE_MODEL", "claude-sonnet-4-20250514")
 
 # Language settings (changeable at runtime)
 current_language = os.getenv("SMARTTYPE_LANGUAGE", "de")
 current_prompt = ""
+
+# Marker mode: when True, requires ... prefix; when False, completes entire line
+marker_mode = True
 
 LANG_NAMES = {"de": "Deutsch", "en": "English"}
 
@@ -90,7 +94,7 @@ def complete_with_ai(incomplete_text: str, context_before: str = "", context_aft
 # ── Text Field Processing ───────────────────────────────────────
 
 def process_textfield():
-    """Reads backwards from cursor to ..., completes the text."""
+    """Reads backwards from cursor, completes the text."""
     global _processing
 
     if _processing:
@@ -108,17 +112,16 @@ def process_textfield():
         pyperclip.copy("")
         time.sleep(0.05)
 
-        # Select everything from cursor to beginning of line and copy
-        keyboard.send("shift+home")
+        # Select everything from cursor to beginning of text field and copy
+        keyboard.send("ctrl+shift+home")
         time.sleep(0.1)
         keyboard.send("ctrl+c")
         time.sleep(0.15)
         text_before_cursor = pyperclip.paste()
 
-        if not text_before_cursor or "..." not in text_before_cursor:
-            # Cancel selection
+        if not text_before_cursor or not text_before_cursor.strip():
             keyboard.send("right")
-            print("[SmartType] No ... marker found.")
+            print("[SmartType] No text found.")
             winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             try:
                 pyperclip.copy(old_clipboard)
@@ -126,40 +129,55 @@ def process_textfield():
                 pass
             return
 
-        # Find last ... marker
-        marker_pos = text_before_cursor.rfind("...")
-        incomplete = text_before_cursor[marker_pos + 3:]  # Text after the ...
+        if marker_mode:
+            # Marker mode: find ... and complete only the text after it
+            if "..." not in text_before_cursor:
+                keyboard.send("right")
+                print("[SmartType] No ... marker found.")
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                try:
+                    pyperclip.copy(old_clipboard)
+                except Exception:
+                    pass
+                return
 
-        if not incomplete.strip():
-            keyboard.send("right")
-            print("[SmartType] No text after ... found.")
-            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
-            try:
-                pyperclip.copy(old_clipboard)
-            except Exception:
-                pass
-            return
+            marker_pos = text_before_cursor.rfind("...")
+            incomplete = text_before_cursor[marker_pos + 3:]
 
-        # Cancel selection, then select only from ... to cursor
-        keyboard.send("right")  # Cursor to end (original position)
-        time.sleep(0.05)
-        # Calculate number of characters from ... to cursor (incl. ...)
-        chars_to_select = len(text_before_cursor) - marker_pos
-        for _ in range(chars_to_select):
-            keyboard.send("shift+left")
-        time.sleep(0.1)
+            if not incomplete.strip():
+                keyboard.send("right")
+                print("[SmartType] No text after ... found.")
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                try:
+                    pyperclip.copy(old_clipboard)
+                except Exception:
+                    pass
+                return
 
-        print(f"[SmartType] Verarbeite: \"{incomplete.strip()[:60]}\"")
+            # Keep everything before the ... marker as prefix
+            prefix = text_before_cursor[:marker_pos]
+        else:
+            # Full line mode: complete the entire selected text
+            incomplete = text_before_cursor
+            prefix = ""
+
+        print(f"[SmartType] Processing: \"{incomplete.strip()[:60]}\"")
 
         # Feedback sound: processing started
         winsound.Beep(800, 150)
 
         completed = complete_with_ai(incomplete)
 
-        print(f"  Ergebnis: \"{completed[:60]}\"")
+        print(f"  Result: \"{completed[:60]}\"")
 
-        # Insert result (selection is still active — replaces ...text)
-        pyperclip.copy(completed)
+        # Re-select everything from cursor to start (selection may have been lost during API call)
+        keyboard.send("right")
+        time.sleep(0.05)
+        keyboard.send("ctrl+shift+home")
+        time.sleep(0.1)
+
+        # Replace entire selection with prefix + completed text
+        pyperclip.copy(prefix + completed)
         time.sleep(0.05)
         keyboard.send("ctrl+v")
         time.sleep(0.2)
@@ -259,34 +277,57 @@ def toggle_language():
         winsound.Beep(1100, 150)
 
 
+def toggle_marker_mode():
+    """Toggles between marker mode (...prefix) and full line mode."""
+    global marker_mode
+    marker_mode = not marker_mode
+    mode_name = "...prefix" if marker_mode else "full line"
+    print(f"[SmartType] Marker mode: {mode_name}")
+    show_toast(f"SmartType: {mode_name}")
+    if marker_mode:
+        winsound.Beep(900, 100)
+        time.sleep(0.05)
+        winsound.Beep(1100, 100)
+    else:
+        winsound.Beep(1100, 100)
+        time.sleep(0.05)
+        winsound.Beep(900, 100)
+
+
 # ── Main Program ────────────────────────────────────────────────
 
 def main():
     print()
     print("=" * 55)
-    print("  SmartType - KI Textvervollständigung")
+    print("  SmartType - AI Text Completion")
     print("=" * 55)
-    print(f"  Vervollständigen:  {HOTKEY}")
-    print(f"  Sprache wechseln:  {LANG_TOGGLE_HOTKEY}")
-    print(f"  Sprache:           {LANG_NAMES.get(current_language, current_language)}")
-    print(f"  Modell:            {MODEL}")
-    print(f"  Markierung:        ...text")
+    print(f"  Complete:          {HOTKEY}")
+    print(f"  Toggle language:   {LANG_TOGGLE_HOTKEY}")
+    print(f"  Toggle ...marker:  {MARKER_TOGGLE_HOTKEY}")
+    print(f"  Language:          {LANG_NAMES.get(current_language, current_language)}")
+    print(f"  Model:             {MODEL}")
+    print(f"  Marker mode:       {'ON (...prefix)' if marker_mode else 'OFF (full line)'}")
     print("=" * 55)
     print()
-    print("  Schreibe ... vor unvollständigem Text,")
-    print("  setze den Cursor ans Ende und drücke den Hotkey.")
+    print("  Write ... before incomplete text (marker mode),")
+    print("  or complete entire line (full line mode).")
     print()
-    print("  Beispiel:")
-    print('    "Hallo, ...Katze schläft Sofa"  [Cursor hier]')
-    print('    → "Hallo, Die Katze schläft auf dem Sofa."')
+    print("  Examples:")
+    print('    "...ih mss mrgn zm arzt ghn"')
+    print('    → "Ich muss morgen zum Arzt gehen."')
     print()
-    print(f"  {HOTKEY} = Vervollständigen")
-    print(f"  {LANG_TOGGLE_HOTKEY} = Sprache DE/EN umschalten")
-    print("  Strg+C = Beenden")
+    print('    "Hi, ...cn yu tll me hw to gt to th sttion"')
+    print('    → "Hi, Can you tell me how to get to the station?"')
+    print()
+    print(f"  {HOTKEY} = Complete")
+    print(f"  {LANG_TOGGLE_HOTKEY} = Toggle language DE/EN")
+    print(f"  {MARKER_TOGGLE_HOTKEY} = Toggle ...marker mode")
+    print("  Ctrl+C = Exit")
     print()
 
     keyboard.add_hotkey(HOTKEY, on_hotkey, suppress=True)
     keyboard.add_hotkey(LANG_TOGGLE_HOTKEY, toggle_language, suppress=True)
+    keyboard.add_hotkey(MARKER_TOGGLE_HOTKEY, toggle_marker_mode, suppress=True)
 
     # Startup sound
     winsound.Beep(1000, 100)

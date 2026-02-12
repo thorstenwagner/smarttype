@@ -1,12 +1,8 @@
 """
-SmartType - AI Text Completion for Any Text Field
-==================================================
-Mark incomplete text with ... at the beginning.
-Press the hotkey, and the text will be automatically completed.
-
-Example:
-  Input: "Hello, ...I tmrrw dctr go"
-  Result: "Hello, I have to go to the doctor tomorrow."
+SmartType - Core Application
+==============================
+AI text completion engine: hotkey listener, clipboard handling,
+Claude API integration, and toast notifications.
 """
 
 import re
@@ -24,10 +20,19 @@ import anthropic
 from pathlib import Path
 from dotenv import load_dotenv
 
+# ── Package-level paths ────────────────────────────────────────
+
+PACKAGE_DIR = Path(__file__).parent
+PROMPTS_DIR = PACKAGE_DIR / "prompts"
+
 # ── Configuration ──────────────────────────────────────────────
 
-SCRIPT_DIR = Path(__file__).parent
-load_dotenv(SCRIPT_DIR / ".env")
+# Load .env from current working directory (user's project)
+_user_env = Path.cwd() / ".env"
+if _user_env.exists():
+    load_dotenv(_user_env)
+else:
+    load_dotenv()
 
 API_KEY = os.getenv("CLAUDE_API_KEY", "").strip()
 HOTKEY = os.getenv("SMARTTYPE_HOTKEY", "ctrl+shift+j")
@@ -44,31 +49,25 @@ marker_mode = False
 
 LANG_NAMES = {"de": "Deutsch", "en": "English"}
 
-if not API_KEY:
-    print("[SmartType] ERROR: CLAUDE_API_KEY not set!")
-    print("  Please set in .env file: CLAUDE_API_KEY=sk-ant-...")
-    sys.exit(1)
+# Claude Client (initialized in main after API key is available)
+client = None
+
+# Prevents concurrent processing
+_processing = False
 
 
 def load_prompt(lang: str) -> str:
     """Loads the system prompt for the given language."""
-    prompt_file = SCRIPT_DIR / f"prompt_{lang}.txt"
-    if not prompt_file.exists():
-        print(f"[SmartType] ERROR: Prompt file not found: {prompt_file}")
-        sys.exit(1)
-    return prompt_file.read_text(encoding="utf-8").strip()
-
-
-current_prompt = load_prompt(current_language)
-
-# Claude Client
-client = anthropic.Anthropic(api_key=API_KEY)
-
-# Pattern: ...text (no closing ..., ends at cursor)
-PATTERN = re.compile(r"\.\.\.(\[\s\S]+?)$")
-
-# Prevents concurrent processing
-_processing = False
+    # First check user's working directory
+    user_prompt = Path.cwd() / f"prompt_{lang}.txt"
+    if user_prompt.exists():
+        return user_prompt.read_text(encoding="utf-8").strip()
+    # Fall back to bundled prompts
+    pkg_prompt = PROMPTS_DIR / f"prompt_{lang}.txt"
+    if pkg_prompt.exists():
+        return pkg_prompt.read_text(encoding="utf-8").strip()
+    print(f"[SmartType] ERROR: Prompt file not found: prompt_{lang}.txt")
+    sys.exit(1)
 
 
 # ── AI Completion ────────────────────────────────────────────────
@@ -265,8 +264,7 @@ def toggle_language():
     current_prompt = load_prompt(current_language)
     lang_name = LANG_NAMES.get(current_language, current_language)
     print(f"[SmartType] Language switched: {lang_name}")
-    show_toast(f"🌐 SmartType: {lang_name}")
-    # Feedback: low=de, high=en
+    show_toast(f"\U0001F310 SmartType: {lang_name}")
     if current_language == "de":
         winsound.Beep(600, 150)
         time.sleep(0.05)
@@ -292,96 +290,3 @@ def toggle_marker_mode():
         winsound.Beep(1100, 100)
         time.sleep(0.05)
         winsound.Beep(900, 100)
-
-
-# ── Main Program ────────────────────────────────────────────────
-
-def prompt_for_api_key():
-    """Prompts user for API key and saves it to .env."""
-    global API_KEY
-    print()
-    print("=" * 55)
-    print("  SmartType - API Key Setup")
-    print("=" * 55)
-    print()
-    print("  No Claude API key found.")
-    print("  Get your key at: https://console.anthropic.com/")
-    print()
-    key = input("  Enter your Claude API key: ").strip()
-    if not key:
-        print("  No key entered. Exiting.")
-        sys.exit(1)
-    API_KEY = key
-    # Save to .env file
-    env_path = SCRIPT_DIR / ".env"
-    if env_path.exists():
-        content = env_path.read_text(encoding="utf-8")
-        if "CLAUDE_API_KEY=" in content:
-            # Replace existing (empty or placeholder) line
-            import re as _re
-            content = _re.sub(
-                r"CLAUDE_API_KEY=.*",
-                f"CLAUDE_API_KEY={key}",
-                content
-            )
-        else:
-            content += f"\nCLAUDE_API_KEY={key}\n"
-        env_path.write_text(content, encoding="utf-8")
-    else:
-        env_path.write_text(f"CLAUDE_API_KEY={key}\n", encoding="utf-8")
-    print()
-    print("  API key saved to .env")
-    print()
-
-
-def main():
-    global API_KEY
-
-    if not API_KEY:
-        prompt_for_api_key()
-
-    print()
-    print("=" * 55)
-    print("  SmartType - AI Text Completion")
-    print("=" * 55)
-    print(f"  Complete:          {HOTKEY}")
-    print(f"  Toggle language:   {LANG_TOGGLE_HOTKEY}")
-    print(f"  Toggle ...marker:  {MARKER_TOGGLE_HOTKEY}")
-    print(f"  Language:          {LANG_NAMES.get(current_language, current_language)}")
-    print(f"  Model:             {MODEL}")
-    print(f"  Marker mode:       {'ON (...prefix)' if marker_mode else 'OFF (full line)'}")
-    print("=" * 55)
-    print()
-    print("  Write ... before incomplete text (marker mode),")
-    print("  or complete entire line (full line mode).")
-    print()
-    print("  Examples:")
-    print('    "...ih mss mrgn zm arzt ghn"')
-    print('    → "Ich muss morgen zum Arzt gehen."')
-    print()
-    print('    "Hi, ...cn yu tll me hw to gt to th sttion"')
-    print('    → "Hi, Can you tell me how to get to the station?"')
-    print()
-    print(f"  {HOTKEY} = Complete")
-    print(f"  {LANG_TOGGLE_HOTKEY} = Toggle language DE/EN")
-    print(f"  {MARKER_TOGGLE_HOTKEY} = Toggle ...marker mode")
-    print("  Ctrl+C = Exit")
-    print()
-
-    keyboard.add_hotkey(HOTKEY, on_hotkey, suppress=True)
-    keyboard.add_hotkey(LANG_TOGGLE_HOTKEY, toggle_language, suppress=True)
-    keyboard.add_hotkey(MARKER_TOGGLE_HOTKEY, toggle_marker_mode, suppress=True)
-
-    # Startup sound
-    winsound.Beep(1000, 100)
-    time.sleep(0.05)
-    winsound.Beep(1200, 100)
-
-    try:
-        keyboard.wait()
-    except KeyboardInterrupt:
-        print("\n[SmartType] Stopped.")
-
-
-if __name__ == "__main__":
-    main()

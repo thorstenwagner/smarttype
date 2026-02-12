@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smarttype-ai"
+version = "1.0.0"
+description = "AI-powered text completion for any text field using Claude"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Thomas Wagner"},
+]
+keywords = ["ai", "text-completion", "claude", "anthropic", "autocomplete", "typing-assistant"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "anthropic>=0.30.0",
+    "keyboard>=0.13.5",
+    "pyperclip>=1.8.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/twagner/smarttype"
+Repository = "https://github.com/twagner/smarttype"
+Issues = "https://github.com/twagner/smarttype/issues"
+
+[project.scripts]
+smarttype = "smarttype.cli:main"
+
+[project.gui-scripts]
+smarttype-gui = "smarttype.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["smarttype*"]
+
+[tool.setuptools.package-data]
+smarttype = ["prompts/*.txt"]

@@ -1,0 +1,12 @@
+name: smarttype
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - anthropic
+    - keyboard
+    - pyperclip
+    - python-dotenv

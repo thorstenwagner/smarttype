@@ -38,7 +38,7 @@ API_KEY = os.getenv("CLAUDE_API_KEY", "").strip()
 HOTKEY = os.getenv("SMARTTYPE_HOTKEY", "ctrl+shift+j")
 LANG_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_LANG_HOTKEY", "ctrl+shift+g")
 MARKER_TOGGLE_HOTKEY = os.getenv("SMARTTYPE_MARKER_HOTKEY", "ctrl+shift+h")
-MODEL = os.getenv("SMARTTYPE_MODEL", "claude-sonnet-4-20250514")
+MODEL = os.getenv("SMARTTYPE_MODEL", "claude-sonnet-4-5-20250929")
 
 # Language settings (changeable at runtime)
 current_language = os.getenv("SMARTTYPE_LANGUAGE", "de")

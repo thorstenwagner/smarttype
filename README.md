@@ -145,7 +145,7 @@ All settings via environment variables or `.env` file:
 | `SMARTTYPE_HOTKEY` | `ctrl+shift+j` | Completion hotkey |
 | `SMARTTYPE_LANG_HOTKEY` | `ctrl+shift+g` | Language toggle hotkey |
 | `SMARTTYPE_MARKER_HOTKEY` | `ctrl+shift+h` | Marker mode toggle hotkey |
-| `SMARTTYPE_MODEL` | `claude-sonnet-4-20250514` | Claude model |
+| `SMARTTYPE_MODEL` | `claude-sonnet-4-5-20250929` | Claude model |
 | `SMARTTYPE_LANGUAGE` | `de` | Starting language (`de` or `en`) |
 
 ## Custom prompts

@@ -31,7 +31,7 @@ Type less. Say more. Stay in the conversation.
 
 ## Features
 
-- **Optimized for eye tracking** — all shortcuts are designed for the on-screen keyboard of the [Tobii PCEye 5](https://www.tobii.com/products/assistive-technology), so everything can be triggered without closing the on-screen keyboard
+- **Optimized for eye tracking** — all shortcuts are designed for the on-screen keyboard of the [Tobii PCEye 5](https://www.tobiidynavox.com/products/pceye-5), so everything can be triggered without closing the on-screen keyboard
 - **Works in any text field** — Signal, Word, Element, browsers, email, voice synthesis software
 - **Understands heavily abbreviated text** — skip vowels, shorten words, leave out grammar
 - **Multi-language** — German and English, switchable with a hotkey

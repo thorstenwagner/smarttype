@@ -74,18 +74,18 @@ def load_prompt(lang: str) -> str:
 
 def complete_with_ai(incomplete_text: str, context_before: str = "", context_after: str = "") -> str:
     """Sends incomplete text to Claude for completion."""
+    # Language-specific instruction prefix
+    if current_language == "de":
+        prefix = "Bitte vervollständige folgenden abgekürzten Text: "
+    else:
+        prefix = "Please complete the following abbreviated text: "
+
     user_msg = ""
     if context_before.strip():
         user_msg += f"Previous context: {context_before.strip()}\n\n"
-    user_msg += incomplete_text.strip()
+    user_msg += prefix + incomplete_text.strip()
     if context_after.strip():
         user_msg += f"\n\nFollowing context: {context_after.strip()}"
-
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=2048,
-        system=current_prompt,
-        messages=[{"role": "user", "content": user_msg}],
     )
     return response.content[0].text.strip()
 

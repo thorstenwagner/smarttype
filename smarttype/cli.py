@@ -37,8 +37,11 @@ def prompt_for_api_key():
         print("  No key entered. Exiting.")
         sys.exit(1)
     app.API_KEY = key
-    # Save to .env file in current working directory
-    env_path = Path.cwd() / ".env"
+    # Save to .env file next to exe (frozen) or in current directory
+    if getattr(sys, 'frozen', False):
+        env_path = Path(sys.executable).parent / ".env"
+    else:
+        env_path = Path.cwd() / ".env"
     if env_path.exists():
         content = env_path.read_text(encoding="utf-8")
         import re

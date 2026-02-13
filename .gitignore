@@ -9,6 +9,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+installer_output/
 *.egg
 *.whl
 *.tar.gz
+*.spec

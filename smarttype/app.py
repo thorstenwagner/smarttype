@@ -22,13 +22,21 @@ from dotenv import load_dotenv
 
 # ── Package-level paths ────────────────────────────────────────
 
-PACKAGE_DIR = Path(__file__).parent
+# Support PyInstaller frozen mode
+if getattr(sys, 'frozen', False):
+    PACKAGE_DIR = Path(sys._MEIPASS) / "smarttype"
+else:
+    PACKAGE_DIR = Path(__file__).parent
 PROMPTS_DIR = PACKAGE_DIR / "prompts"
 
 # ── Configuration ──────────────────────────────────────────────
 
-# Load .env from current working directory (user's project)
-_user_env = Path.cwd() / ".env"
+# Load .env from exe directory (frozen) or current working directory
+if getattr(sys, 'frozen', False):
+    _exe_dir = Path(sys.executable).parent
+    _user_env = _exe_dir / ".env"
+else:
+    _user_env = Path.cwd() / ".env"
 if _user_env.exists():
     load_dotenv(_user_env)
 else:
@@ -86,6 +94,12 @@ def complete_with_ai(incomplete_text: str, context_before: str = "", context_aft
     user_msg += prefix + incomplete_text.strip()
     if context_after.strip():
         user_msg += f"\n\nFollowing context: {context_after.strip()}"
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=2048,
+        system=current_prompt,
+        messages=[{"role": "user", "content": user_msg}],
     )
     return response.content[0].text.strip()
 

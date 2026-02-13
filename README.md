@@ -44,6 +44,10 @@ Type less. Say more. Stay in the conversation.
 
 ## Installation
 
+### Windows Installer (recommended)
+
+Download the latest `SmartType-Setup.exe` from [Releases](https://github.com/thorstenwagner/smarttype/releases). No Python installation required — everything is included.
+
 ### From PyPI
 
 ```bash

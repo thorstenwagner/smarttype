@@ -2,7 +2,7 @@
 ; Requires Inno Setup 6+ (https://jrsoftware.org/isinfo.php)
 
 #define MyAppName "SmartType"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Thomas Wagner"
 #define MyAppURL "https://github.com/thorstenwagner/smarttype"
 #define MyAppExeName "SmartType.exe"

@@ -14,3 +14,4 @@ installer_output/
 *.whl
 *.tar.gz
 *.spec
+abbreviation_benchmark.ipynb

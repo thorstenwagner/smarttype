@@ -10,8 +10,6 @@ import os
 import sys
 import time
 import threading
-import winsound
-
 import tkinter as tk
 
 import keyboard
@@ -135,7 +133,6 @@ def process_textfield():
         if not text_before_cursor or not text_before_cursor.strip():
             keyboard.send("right")
             print("[SmartType] No text found.")
-            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
             try:
                 pyperclip.copy(old_clipboard)
             except Exception:
@@ -147,7 +144,6 @@ def process_textfield():
             if "..." not in text_before_cursor:
                 keyboard.send("right")
                 print("[SmartType] No ... marker found.")
-                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
                 try:
                     pyperclip.copy(old_clipboard)
                 except Exception:
@@ -160,7 +156,6 @@ def process_textfield():
             if not incomplete.strip():
                 keyboard.send("right")
                 print("[SmartType] No text after ... found.")
-                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
                 try:
                     pyperclip.copy(old_clipboard)
                 except Exception:
@@ -175,9 +170,6 @@ def process_textfield():
             prefix = ""
 
         print(f"[SmartType] Processing: \"{incomplete.strip()[:60]}\"")
-
-        # Feedback sound: processing started
-        winsound.Beep(800, 150)
 
         completed = complete_with_ai(incomplete)
 
@@ -195,11 +187,6 @@ def process_textfield():
         keyboard.send("ctrl+v")
         time.sleep(0.2)
 
-        # Feedback sound: done
-        winsound.Beep(1200, 150)
-        time.sleep(0.1)
-        winsound.Beep(1500, 150)
-
         print("[SmartType] Done!\n")
 
         # Restore clipboard after short delay
@@ -211,10 +198,8 @@ def process_textfield():
 
     except anthropic.APIError as e:
         print(f"[SmartType] API error: {e}")
-        winsound.MessageBeep(winsound.MB_ICONHAND)
     except Exception as e:
         print(f"[SmartType] Error: {e}")
-        winsound.MessageBeep(winsound.MB_ICONHAND)
     finally:
         _processing = False
 
@@ -279,14 +264,6 @@ def toggle_language():
     lang_name = LANG_NAMES.get(current_language, current_language)
     print(f"[SmartType] Language switched: {lang_name}")
     show_toast(f"\U0001F310 SmartType: {lang_name}")
-    if current_language == "de":
-        winsound.Beep(600, 150)
-        time.sleep(0.05)
-        winsound.Beep(800, 150)
-    else:
-        winsound.Beep(800, 150)
-        time.sleep(0.05)
-        winsound.Beep(1100, 150)
 
 
 def toggle_marker_mode():
@@ -296,11 +273,3 @@ def toggle_marker_mode():
     mode_name = "...prefix" if marker_mode else "full line"
     print(f"[SmartType] Marker mode: {mode_name}")
     show_toast(f"SmartType: {mode_name}")
-    if marker_mode:
-        winsound.Beep(900, 100)
-        time.sleep(0.05)
-        winsound.Beep(1100, 100)
-    else:
-        winsound.Beep(1100, 100)
-        time.sleep(0.05)
-        winsound.Beep(900, 100)

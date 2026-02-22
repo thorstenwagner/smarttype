@@ -6,4 +6,4 @@ Trigger with a keyboard shortcut.
 """
 
 __version__ = "1.1.0"
-__author__ = "Thomas Wagner"
+__author__ = "Thorsten Wagner"

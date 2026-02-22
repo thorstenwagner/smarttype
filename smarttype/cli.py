@@ -6,7 +6,6 @@ Handles startup, API key prompt, and hotkey registration.
 
 import sys
 import time
-import winsound
 
 import keyboard
 import anthropic
@@ -101,11 +100,6 @@ def main():
     keyboard.add_hotkey(HOTKEY, on_hotkey, suppress=True)
     keyboard.add_hotkey(LANG_TOGGLE_HOTKEY, toggle_language, suppress=True)
     keyboard.add_hotkey(MARKER_TOGGLE_HOTKEY, toggle_marker_mode, suppress=True)
-
-    # Startup sound
-    winsound.Beep(1000, 100)
-    time.sleep(0.05)
-    winsound.Beep(1200, 100)
 
     try:
         keyboard.wait()

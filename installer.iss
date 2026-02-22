@@ -3,7 +3,7 @@
 
 #define MyAppName "SmartType"
 #define MyAppVersion "1.1.1"
-#define MyAppPublisher "Thomas Wagner"
+#define MyAppPublisher "Thorsten Wagner"
 #define MyAppURL "https://github.com/thorstenwagner/smarttype"
 #define MyAppExeName "SmartType.exe"
 
